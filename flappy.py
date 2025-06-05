@@ -2,6 +2,7 @@ import pygame
 from pygame.locals import *
 import random
 import sys
+import os
 
 pygame.init()
 
@@ -31,17 +32,42 @@ last_pipe = pygame.time.get_ticks() - pipe_frequency
 score = 0
 pass_pipe = False
 main_menu = True
+selected_skin = 1  # default skin index
+shop_menu = False
 
 # Load images
-bg = pygame.image.load('img/bg.png')
-ground_img = pygame.image.load('img/ground.png')
-button_img = pygame.image.load('img/newgame_btn.png')
-new_game_img = pygame.image.load('img/start_btn.png')
-exit_img = pygame.image.load('img/quit_btn.png')
-menu_img = pygame.image.load('img/menu_btn.png')
-game_over_img = pygame.image.load('img/gameover.png')
-game_logo_img =  pygame.image.load('img/flappy_logo.png')
+bg = pygame.image.load('img/bg.png').convert()
+ground_img = pygame.image.load('img/ground.png').convert_alpha()
+button_img = pygame.image.load('img/newgame_btn.png').convert_alpha()
+new_game_img = pygame.image.load('img/start_btn.png').convert_alpha()
+exit_img = pygame.image.load('img/quit_btn.png').convert_alpha()
+menu_img = pygame.image.load('img/menu_btn.png').convert_alpha()
+game_over_img = pygame.image.load('img/gameover.png').convert_alpha()
+game_logo_img = pygame.image.load('img/flappy_logo.png').convert_alpha()
+shop_img = pygame.image.load('img/shop_btn.png').convert_alpha()
 
+# Load bird skins dynamically and resize all skins to the size of bird1.png
+bird_skins = []
+
+# Load bird1.png first to get base size
+base_bird_img = pygame.image.load('img/bird1.png').convert_alpha()
+base_size = base_bird_img.get_size()
+
+# Now scan img folder for bird skins (bird1.png, bird2.png, bird3.png, etc.)
+# You can add as many skins as you want with this naming pattern: birdX.png
+skin_index = 1
+while True:
+    skin_path = f'img/bird{skin_index}.png'
+    if not os.path.isfile(skin_path):
+        break
+    skin_img = pygame.image.load(skin_path).convert_alpha()
+    skin_img = pygame.transform.scale(skin_img, base_size)  # resize to base size
+    bird_skins.append(skin_img)
+    skin_index += 1
+
+# If no skins found, fallback to base bird1.png
+if len(bird_skins) == 0:
+    bird_skins.append(base_bird_img)
 
 # draw center text
 def draw_center_text(text, font, color, x, y):
@@ -52,15 +78,19 @@ def draw_center_text(text, font, color, x, y):
 # Reset game
 def reset_game():
     pipe_group.empty()
-    flappy.rect.x = 100
-    flappy.rect.y = int(screen_height / 2)
+    global flappy
+    flappy = Bird(100, screen_height // 2, selected_skin)
+    bird_group.empty()
+    bird_group.add(flappy)
     return 0
 
 # Bird class
 class Bird(pygame.sprite.Sprite):
-    def __init__(self, x, y):
+    def __init__(self, x, y, skin_index):
         super().__init__()
-        self.images = [pygame.image.load(f'img/bird{num}.png') for num in range(1, 4)]
+        # Use the loaded skin images list to support animation if needed
+        # For now, just single image for selected skin
+        self.images = [bird_skins[skin_index - 1]]  # list of one image
         self.index = 0
         self.counter = 0
         self.image = self.images[self.index]
@@ -94,7 +124,7 @@ class Bird(pygame.sprite.Sprite):
 class Pipe(pygame.sprite.Sprite):
     def __init__(self, x, y, position):
         super().__init__()
-        self.image = pygame.image.load('img/pipe.png')
+        self.image = pygame.image.load('img/pipe.png').convert_alpha()
         self.rect = self.image.get_rect()
         if position == 1:
             self.image = pygame.transform.flip(self.image, False, True)
@@ -131,45 +161,75 @@ class Button():
 
         return action
 
+
 # Sprite groups
 bird_group = pygame.sprite.Group()
 pipe_group = pygame.sprite.Group()
 
-flappy = Bird(100, screen_height // 2)
+flappy = Bird(100, screen_height // 2, selected_skin)
 bird_group.add(flappy)
 
 # Buttons
 restart_button = Button(screen_width // 2, screen_height // 2 + 20, button_img)
-back_to_menu_button = Button(screen_width // 2, screen_height // 2 + 90, menu_img)
-exit_button_gameover = Button(screen_width // 2, screen_height // 2 + 160, exit_img)
-new_game_button = Button(screen_width // 2 - 80, screen_height // 2, new_game_img)
-exit_button_mainmenu = Button(screen_width // 2 + 80, screen_height // 2, exit_img)
+back_to_menu_button = Button(screen_width // 2, screen_height // 2 + 160, menu_img)
+exit_button_gameover = Button(screen_width // 2, screen_height // 2 + 220, exit_img)
+new_game_button = Button(screen_width // 2, screen_height // 2 - 70, new_game_img)
+shop_button = Button(screen_width // 2, screen_height // 2 + 10, shop_img)
+exit_button_mainmenu = Button(screen_width // 2, screen_height // 2 + 90, exit_img)
+menu_button_gameover = Button(screen_width // 2, screen_height // 2 + 130, menu_img) 
+
 
 # Main loop
 run = True
 while run:
     clock.tick(fps)
 
-    if main_menu:
-        screen.blit(bg, (0, 0))
-        screen.blit(ground_img, (0, 768))
-        screen.blit(game_logo_img, game_logo_img.get_rect(center=(screen_width // 2, screen_height // 2 - 100)))
+    screen.blit(bg, (0, 0))
+
+    # Main Menu
+    if main_menu and not shop_menu:
+        screen.blit(ground_img, (0, 700))
+        screen.blit(game_logo_img, game_logo_img.get_rect(center=(screen_width // 2, screen_height // 2 - 200)))
 
         if new_game_button.draw():
             main_menu = False
+            shop_menu = False
             flying = False
             game_over = False
             score = reset_game()
 
+        if shop_button.draw():
+            shop_menu = True  # go to shop
+
         if exit_button_mainmenu.draw():
             run = False
 
+    # Shop Menu
+    elif shop_menu:
+        screen.blit(ground_img, (0, 700))
+        draw_center_text("Select a Bird Skin", font, white, screen_width // 2, 80)
+
+        for i, skin in enumerate(bird_skins):
+            skin_scaled = pygame.transform.scale(skin, (60, 60))
+            rect = skin_scaled.get_rect(center=(150 + i * 100, 200))
+            screen.blit(skin_scaled, rect)
+
+            if rect.collidepoint(pygame.mouse.get_pos()) and pygame.mouse.get_pressed()[0]:
+                selected_skin = i + 1
+                flappy = Bird(100, screen_height // 2, selected_skin)
+                bird_group.empty()
+                bird_group.add(flappy)
+
+        if back_to_menu_button.draw():
+            shop_menu = False
+            main_menu = True
+
+    # Gameplay
     else:
-        screen.blit(bg, (0, 0))
         bird_group.draw(screen)
         bird_group.update()
         pipe_group.draw(screen)
-        screen.blit(ground_img, (ground_scroll, 768))
+        screen.blit(ground_img, (ground_scroll, 700))  # Ground position fixed to 700, matches main menu
 
         if len(pipe_group) > 0:
             bird = bird_group.sprites()[0]
@@ -184,7 +244,7 @@ while run:
 
         if pygame.sprite.groupcollide(bird_group, pipe_group, False, False) or flappy.rect.top < 0:
             game_over = True
-        if flappy.rect.bottom >= 768:
+        if flappy.rect.bottom >= 700:
             game_over = True
             flying = False
 
@@ -207,17 +267,19 @@ while run:
             
             if restart_button.draw():
                 game_over = False
-                score = reset_game()
-
-            if back_to_menu_button.draw():
-                game_over = False
                 flying = False
                 score = reset_game()
+
+            if menu_button_gameover.draw():
+                game_over = False
+                flying = False
                 main_menu = True
+                shop_menu = False
 
             if exit_button_gameover.draw():
                 run = False
 
+    # Global events
     for event in pygame.event.get():
         if event.type == pygame.QUIT:
             run = False
